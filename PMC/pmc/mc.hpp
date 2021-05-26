@@ -7,7 +7,7 @@
 struct hash_data
 {
 	std::uint32_t function;
-	std::uint16_t size;
+	std::size_t size;
 	std::uint32_t hash;
 };
 

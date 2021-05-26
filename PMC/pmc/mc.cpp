@@ -29,7 +29,7 @@ void memory_checker::start()
 			{
 				std::uint32_t hash = XXHash32::hash(reinterpret_cast<void*>(hash_data.function), hash_data.size, this->seed);
 
-				const auto random_junk = 5 + std::rand();
+				const auto random_junk = 5 + LI_FN(rand).cached()();
 
 				switch (random_junk)
 				{
@@ -46,7 +46,7 @@ void memory_checker::start()
 					}
 				}
 			}
-			LI_FN(Sleep)(1000);
+			LI_FN(Sleep).cached()(1000);
 		}
 	}).detach();
 }

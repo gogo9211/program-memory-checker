@@ -11,12 +11,36 @@ memory_checker::memory_checker()
 	this->seed = static_cast<std::uint16_t>(1 + (std::rand() % 0x1000));
 }
 
-void memory_checker::hash(const std::uintptr_t function) 
+void memory_checker::hash() 
 {
-	std::uint16_t size = this->calculate_function_size(function);
-	std::uint32_t hash = XXHash32::hash(reinterpret_cast<void*>(function), size, this->seed);
+	HMODULE module = LI_FN(GetModuleHandleA).cached()(0);
+	IMAGE_DOS_HEADER* const dos_header = reinterpret_cast<IMAGE_DOS_HEADER*>(module);
+	IMAGE_NT_HEADERS* const nt_headers = reinterpret_cast<IMAGE_NT_HEADERS*>(reinterpret_cast<BYTE*>(dos_header) + dos_header->e_lfanew);
 
-	this->data.push_back({ function, size, hash });
+	std::size_t chunk_size = 0x300;
+	std::uint32_t text = nt_headers->OptionalHeader.ImageBase + nt_headers->OptionalHeader.BaseOfCode;
+	const std::uint32_t text_size = nt_headers->OptionalHeader.SizeOfCode;
+	const std::uint32_t text_end = text + text_size;
+
+	while (true)
+	{
+		if (text + chunk_size > text_end)
+		{
+			chunk_size = text_end - text;
+
+			if (chunk_size == 0) { break; }
+
+			const std::uint32_t hash = XXHash32::hash(reinterpret_cast<void*>(text), chunk_size, this->seed);
+			this->data.push_back({ text, chunk_size, hash });
+
+			break;
+		}
+
+		const std::uint32_t hash = XXHash32::hash(reinterpret_cast<void*>(text), chunk_size, this->seed);
+		this->data.push_back({ text, chunk_size, hash });
+
+		text += chunk_size;
+	}
 }
 
 void memory_checker::start()
@@ -25,11 +49,11 @@ void memory_checker::start()
 	{
 		while (true)
 		{
-			for (const auto& hash_data : this->data)
+			for (const hash_data& data : this->data)
 			{
-				std::uint32_t hash = XXHash32::hash(reinterpret_cast<void*>(hash_data.function), hash_data.size, this->seed);
+				const std::uint32_t hash = XXHash32::hash(reinterpret_cast<void*>(data.chunk), data.chunk_size, this->seed);
 
-				const auto random_junk = 5 + LI_FN(rand).cached()();
+				const std::uint32_t random_junk = 5 + LI_FN(rand).cached()();
 
 				switch (random_junk)
 				{
@@ -41,23 +65,12 @@ void memory_checker::start()
 
 					default:
 					{
-						if (hash_data.hash != hash)
-						    LI_FN(printf).cached()(xorstr_("memory anomaly detected at function: 0x%X\n"), hash_data.function);
+						if (data.hash != hash)
+						    LI_FN(printf).cached()(xorstr_("memory anomaly detected at chunk: 0x%X\n"), data.chunk);
 					}
 				}
 			}
 			LI_FN(Sleep).cached()(1000);
 		}
 	}).detach();
-}
-
-std::size_t memory_checker::calculate_function_size(const std::uintptr_t function)
-{
-	auto bytes = reinterpret_cast<std::uint8_t*>(function);
-
-	do
-		bytes += 0x10;
-	while (!(*reinterpret_cast<std::uint16_t*>(bytes) == 0x8B55 && bytes[2] == 0xEC));
-
-	return reinterpret_cast<std::size_t>(bytes) - function;
 }

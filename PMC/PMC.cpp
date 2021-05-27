@@ -14,7 +14,7 @@ int main()
 
     memory_checker pmc = memory_checker();
 
-    pmc.hash(reinterpret_cast<std::uintptr_t>(test_function));
+    pmc.hash();
     pmc.start();
 
     std::cin.get();
